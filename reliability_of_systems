@@ -1,0 +1,104 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"math"
+	"sort"
+	"gonum.org/v1/gonum/integrate/quad"
+)
+
+type Sample struct {
+	x     []int
+	x_len int
+	x_min int
+	x_max int
+	x_sum int
+}
+
+func (s *Sample) Init() (err error) {
+	if len(s.x) >= 2 {
+		sort.Ints(s.x)
+		s.x_len = len(s.x)
+		s.x_min = s.x[0]
+		s.x_max = s.x[s.x_len-1]
+
+		for _, elem := range s.x {
+			s.x_sum += elem
+		}
+
+		return nil
+	} else {
+		return errors.New("выборка должна содержать минимум два значения")
+	}
+
+}
+
+//Экспоненциальное распределение
+func (s *Sample) expDistribution(x float64) float64 {
+
+	lambda := s.x_len / s.x_sum
+	return float64(lambda) * math.Exp(-float64(lambda)*x)
+
+}
+
+//Распределение Релея
+func (s *Sample) ReleyDistribution(x float64) float64 {
+M := s.x_sum/s.x_len
+sigma := float64(M)/1.253
+return (x/(sigma * sigma)) * math.Exp((-x * x)/(2 * sigma * sigma))
+}
+
+//Правила разбиения интервалов
+func intervalRule(rule int, N int) (n int) {
+	switch rule {
+	case 1:
+		n = int(1 + 3.3*math.Log10(float64(N)))
+	case 2:
+		n = int(5 * math.Log10(float64(N)))
+	case 3:
+		n = int(math.Pow(float64(N), 0.5))
+	case 4:
+		n = int(math.Pow(float64(N), 0.33333333))
+	}
+	return
+}
+
+//Критерий Хи квадрат
+func (s *Sample) Khi(f func(float64) float64, n int){
+	delta := (s.x_max - s.x_min)/n
+
+	// Разбиение слайса
+
+	intervals := make([][]int,n)
+	j := 0
+	for i:= 0; i< s.x_len; i++{
+		if s.x[i] < delta{
+			intervals[j] = append(intervals[j], s.x[i])
+		}else{
+			j++
+			delta += delta
+		}
+	}
+//lambda := s.x_len/s.x_sum
+mi := make([]int,n)
+for i:=0; i < n; i++{
+	mi[i] = len(intervals[i])
+}
+delta = (s.x_max - s.x_min)/n
+ev := quad.Fixed(f,0,float64(delta),10,nil, 0)
+fmt.Println(ev)
+}
+func main() {
+	//Исходные данные
+	sample := Sample{x: []int{71, 90, 22, 13, 47, 9, 91, 30, 13, 49, 80, 47, 48, 51, 49, 29,
+		39, 7, 76, 33, 64, 71, 77, 72, 90, 69, 87, 26, 85, 32, 72, 28, 53, 89, 17, 1, 8, 89, 44, 96}}
+
+	if err := sample.Init(); err != nil {
+		panic(err)
+	}
+	//fmt.Printf("%v", sample)
+	n := intervalRule(4, sample.x_len)
+	sample.Khi(sample.expDistribution, n)
+
+}
